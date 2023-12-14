@@ -38,17 +38,166 @@ const progressBar = new cliProgress.SingleBar({
 		format: `Progress [{bar}] {percentage}% | ETA: {eta}s | {value}/{total}`
 }, cliProgress.Presets.shades_classic);
 
+// GET ARGUMEN AS PARAMETER
+// * Parameter di sini optional, jika tidak dimasukkan, maka akan diutamakan pakai api getLastData
+// * --- getLastData => kondisi waktu paling terakhir per tangki dari database
+// * --- getDataHour => kondisi waktu yang ditentukan range nya per tangki dari database
+// execute : node scheduler.js --api=getLastData
 
-// const setint = setInterval(()=>{
-// 	setTimeout(()=>{
-// 		progressBar.update(100);
-// 		if (progressBar.value >= 100){
-// 			progressBar.stop();
-// 			clearInterval(setint)
-// 		}
-// 	})
-// },10)
+let param_api = '';
 
+const yargs = require('yargs');
+
+const argvs = yargs
+						.option('api', {
+								alias:'a',
+								describe:'API IoT ("getLastData" / "getDataHour")',
+								demandOption: false,
+								type:'string',
+								coerce: (arg) => arg.toLowerCase(),
+								choices: ['getlastdata','getdatahour']
+						})
+						.option('date', {
+								alias:'d',
+								describe:'Tanggal yang akan di Filter (Format : "yyyy-mm-dd")',
+								demandOption: false,
+								coerce: (arg) => {
+										param_date_patt = new RegExp(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/,'gi');
+										let param_date_exec = param_date_patt.test(arg);
+										if (!param_date_exec){
+												throw new Error('* Masukkan Parameter Date sesuai format yaitu "yyyy-mm-dd"\n');
+											}
+											else{
+												let validasiTanggal = new Date(arg);
+												if (validasiTanggal == 'Invalid Date'){
+														throw new Error('\n* Periksa kembali Tanggal \'' + arg + '\' tidak valid !\n');
+												}
+										}
+										return arg;
+								},
+								type:'string'
+						})
+						.option('hourbegin', {
+								alias:'h1',
+								describe:'Hour Begin yang akan di Filter (Format : "hh:mm")',
+								demandOption: false,
+								coerce: (arg) => {
+										param_hour1_patt = new RegExp(/^([0-1][0-9]|2[0-3]):([0-5][0-9])$/,'gi');
+										let param_hour1_exec = param_hour1_patt.test(arg);
+										if (!param_hour1_exec)
+										{
+												throw new Error('* Masukkan Parameter Hour Begin sesuai format yaitu "hh:mm" (max -> 23:59)\n');
+										}
+										return arg;
+								}
+						})
+						.option('hourlast', {
+								alias:'h2',
+								describe:'Hour Last yang akan di Filter (Format : "hh:mm")',
+								demandOption: false,
+								coerce: (arg) => {
+										param_hour2_patt = new RegExp(/^([0-1][0-9]|2[0-3]):([0-5][0-9])$/,'gi');
+										let param_hour2_exec = param_hour2_patt.test(arg);
+										if (!param_hour2_exec)
+										{
+												throw new Error('* Masukkan Parameter Hour Last sesuai format yaitu "hh:mm" (max -> 23:59)\n');
+										}
+										return arg;
+								}
+						})
+						.option('replace', {
+								alias:'r',
+								type:'string',
+								describe:'Replace data existing di database (true / false)',
+								demandOption: false
+						})
+						.help()
+						.argv;
+
+param_api = argvs.api;
+param_date = argvs.date;
+param_hourbegin = argvs.hourbegin;
+param_hourlast = argvs.hourlast;
+param_replace = argvs.replace;
+
+// * jika tidak masukkan parameter api, maka di set ke "getlastdata"
+if (typeof param_api == 'undefined' || param_api == null || param_api == '')
+{
+		param_api = 'getlastdata';
+}
+else {
+
+	// jika api nya adalah getDataHour, maka parameter date, hourbegin, dan hourlast wajib dimasukkan
+		if (param_api == 'getdatahour'){
+				if (typeof param_date == 'undefined' || param_date == '' || param_date == null){
+						yargs.showHelp();
+						console.error('\n* Parameter date harus di-Input !\n')
+						return
+						// throw new Error('* Parameter date, hourbegin dan hourlast harus di-input !\n');
+				}
+				else {
+						let inputValidHour1 = true, inputValidHour2 = true;
+						if (typeof param_hourbegin == 'undefined' || param_hourbegin == '' || param_hourbegin == null){
+									inputValidHour1 = false;
+						}
+						if (typeof param_hourlast == 'undefined' || param_hourlast == '' || param_hourlast == null){
+								inputValidHour2 = false;
+								console.error('* Parameter "hourlast" harus di-Input !\n')
+						}
+							
+						if (!inputValidHour1 || !inputValidHour2)
+						{
+								yargs.showHelp();
+								console.error('\n');
+								if (!inputValidHour1){
+										console.error('* Parameter "hourbegin" harus di-Input !\n');
+								}
+								if (!inputValidHour2){
+										console.error('* Parameter "hourlast" harus di-Input !\n')
+								}
+
+								return
+						};
+
+						let periode_begin = new Date(param_date + ' ' + param_hourbegin);
+						let periode_last = new Date(param_date + ' ' + param_hourlast);
+						if (periode_begin > periode_last){
+								yargs.showHelp();
+								console.error('\n* Periode "hourlast" harus lebih besar dari "hourbegin" !\n');
+								return
+						}
+				}
+		}
+
+		if (typeof param_replace != 'undefined' && param_replace != null)
+		{
+				if (param_replace != 'true' && param_replace != 'false')
+				{
+					yargs.showHelp();
+					console.error('\n* Parameter "Replace" harus bernilai "true / false"\n');
+					return
+				}
+
+		}
+}
+
+console.log('\nParam API : ', param_api);
+console.log('Param Date : ', param_date);
+console.log('Param Hour Begin : ', param_hourbegin);
+console.log('Param Hour Last : ', param_hourlast);
+console.log('Param Replace Data : ', param_replace,'\n');
+
+let paramArgument = {
+	param_api,
+	param_date,
+	param_hourbegin,
+	param_hourlast,
+	param_replace
+}
+console.log(paramArgument);
+// ... end Get Parameter
+
+// return  
 
 const _ = require('lodash');
 
@@ -78,12 +227,16 @@ this.arr_date_realtime = [];
 // status => 'success' or 'failed'
 // hasil => hasil dari api
 
-const handleToDatabase = async(p_obj_tinggi_tank_modus_filter_single) => {
+const handleToDatabase = async(p_obj_tinggi_tank_modus_filter_single, counterMajor, p_counterMinor, p_replace_data) => {
 		let obj_modus = {...p_obj_tinggi_tank_modus_filter_single};
-		
-		progressBar.update(
-				(14.285 * 6.9)
-		)
+
+		let replace_data = false;
+		if (typeof p_replace_data != 'undefined' && p_replace_data != '' && p_replace_data != null)
+		{
+				if (p_replace_data == "true"){
+					replace_data = true
+				}else{ replace_data = false}
+		}else { replace_data = false}
 
 		let sortedObject = Object.fromEntries(
 														Object.keys(obj_modus)
@@ -95,33 +248,57 @@ const handleToDatabase = async(p_obj_tinggi_tank_modus_filter_single) => {
 														.map(key => [key, obj_modus[key]])
 													);
 
-		let counterAngka = 0;
+		// let counterAngka = 0;
+		let counterMinor = p_counterMinor;
 		// console.log(Object.keys(p_obj_tinggi_tank_modus_filter_single))
 		for (const eleTankId of Object.keys(sortedObject))
 		{
 				// console.log("---- Tank", eleTankId, "----");
 				// console.log(p_obj_tinggi_tank_modus_filter_single?.[eleTankId]);
 
-				let qryCheckJarak = `SELECT * FROM Iot_Jarak where tangki_id = '` + eleTankId + `'` +
+				let qryCheckJarak = `SELECT * FROM Iot_Jarak_Temp where tangki_id = '` + eleTankId + `'` +
 									` and logtime = '${obj_modus?.[eleTankId]?.['time']}'`;
 				
-				let qryInsertJarak = `INSERT INTO Iot_Jarak(tangki_id, logtime, jarak_sensor, tinggi_sounding, jarak_min, jarak_max, datapoin, logtime_min, logtime_max, berat, created_time)` +
+				let qryInsertJarak = `INSERT INTO Iot_Jarak_Temp(tangki_id, logtime, jarak_sensor, tinggi_sounding, jarak_min, jarak_max, datapoin, logtime_min, logtime_max, berat, created_time)` +
 									` VALUES('${eleTankId}', '${obj_modus?.[eleTankId]?.['time']}', ${obj_modus?.[eleTankId]?.['jarak_sensor_cm']}, ${obj_modus?.[eleTankId]?.['tinggi_minyak_cm']}` +
 									`, ${obj_modus?.[eleTankId]?.['data_jarak_cm_10min_min']}, ${obj_modus?.[eleTankId]?.['data_jarak_cm_10min_max']}` +
 									`, ${obj_modus?.[eleTankId]?.['datapoin']}, '${obj_modus?.[eleTankId]?.['data_jarak_cm_10min_min_log']}', '${obj_modus?.[eleTankId]?.['data_jarak_cm_10min_max_log']}'` +
 									`, ${obj_modus?.[eleTankId]?.['volume']}, '${obj_modus?.[eleTankId]?.['created_time']}'` +	
 								`)`;
 
+					let qryUpdateJarak = `UPDATE Iot_Jarak_Temp` + 
+							` SET logtime='${obj_modus?.[eleTankId]?.['time']}'` +
+							`, jarak_sensor=${obj_modus?.[eleTankId]?.['jarak_sensor_cm']}` + 
+							`, tinggi_sounding=${obj_modus?.[eleTankId]?.['tinggi_minyak_cm']}` + 
+							`, jarak_min=${obj_modus?.[eleTankId]?.['data_jarak_cm_10min_min']}` + 
+							`, jarak_max=${obj_modus?.[eleTankId]?.['data_jarak_cm_10min_max']}` + 
+							`, datapoin=${obj_modus?.[eleTankId]?.['datapoin']}` + 
+							`, logtime_min='${obj_modus?.[eleTankId]?.['data_jarak_cm_10min_min_log']}'` + 
+							`, logtime_max='${obj_modus?.[eleTankId]?.['data_jarak_cm_10min_max_log']}'` + 
+							`, berat=${obj_modus?.[eleTankId]?.['volume']}` + 
+							`, created_time='${obj_modus?.[eleTankId]?.['created_time']}'` +
+							` WHERE tangki_id='${eleTankId}' and logtime='${obj_modus?.[eleTankId]?.['time']}'`;
+					
 				
 								
-				let qryCheckSuhu = `SELECT * FROM Iot_Suhu where tangki_id = '` + eleTankId + `'` +
+				let qryCheckSuhu = `SELECT * FROM Iot_Suhu_Temp where tangki_id = '` + eleTankId + `'` +
 								` and suhutime = '${obj_modus?.[eleTankId]?.['time']}'`;
 
-				let qryInsertSuhu = `INSERT INTO Iot_Suhu(tangki_id, logtime, suhu, suhutime, suhu_count, suhu_min, suhu_max, created_time)` +
+				let qryInsertSuhu = `INSERT INTO Iot_Suhu_Temp(tangki_id, logtime, suhu, suhutime, suhu_count, suhu_min, suhu_max, created_time)` +
 									` VALUES('${eleTankId}', '${obj_modus?.[eleTankId]?.['logtime_suhu']}', ${obj_modus?.[eleTankId]?.['data_suhu_slice_sum_avg']}, '${obj_modus?.[eleTankId]?.['time']}'` +
 									`, ${obj_modus?.[eleTankId]?.['suhu_count']}, ${obj_modus?.[eleTankId]?.['data_suhu_slice_min']}` +
 									`, ${obj_modus?.[eleTankId]?.['data_suhu_slice_max']}, '${obj_modus?.[eleTankId]?.['created_time']}'` +	
 								`)`;
+
+				let qryUpdateSuhu = `UPDATE Iot_Suhu_Temp` + 
+								` SET logtime='${obj_modus?.[eleTankId]?.['logtime_suhu']}'` +
+								`, suhu=${obj_modus?.[eleTankId]?.['data_suhu_slice_sum_avg']}` + 
+								`, suhutime='${obj_modus?.[eleTankId]?.['time']}'` + 
+								`, suhu_count=${obj_modus?.[eleTankId]?.['suhu_count']}` + 
+								`, suhu_min=${obj_modus?.[eleTankId]?.['data_suhu_slice_min']}` + 
+								`, suhu_max=${obj_modus?.[eleTankId]?.['data_suhu_slice_max']}` + 
+								`, created_time='${obj_modus?.[eleTankId]?.['created_time']}'` +
+								` WHERE tangki_id='${eleTankId}' and suhutime='${obj_modus?.[eleTankId]?.['time']}'`;
 
 				// console.log('---- query insert ----')
 				// console.log(qryInsertJarak)
@@ -164,6 +341,19 @@ const handleToDatabase = async(p_obj_tinggi_tank_modus_filter_single) => {
 																											console.log(errInsertSuhu);
 																									})
 																				}
+																				else{
+																						if (replace_data){
+																							await getData_SQL_Await(qryUpdateSuhu)
+																								.then((resultUpdateSuhu)=>{
+			
+																									// console.log(" --> Insert to Table Iot_Suhu_Temp Completed !")
+																								})
+																								.catch((errUpdateSuhu)=>{
+																										console.log("\n---- Error Update Suhu to ",eleTankId, " ----");
+																										console.log(errUpdateSuhu);
+																								})
+																						}
+																				}
 																		}
 
 																})
@@ -174,16 +364,40 @@ const handleToDatabase = async(p_obj_tinggi_tank_modus_filter_single) => {
 												});
 										// console.log(result);
 									}
+									else{
+										if (replace_data){
+											await getData_SQL_Await(qryUpdateJarak)
+												.then(async (resultUpdateJarak)=>{
+
+														await getData_SQL_Await(qryUpdateSuhu)
+															.then((resultUpdateSuhu)=>{
+
+															// console.log(" --> Insert to Table Iot_Suhu_Temp Completed !")
+														})
+														.catch((errUpdateSuhu)=>{
+																console.log("\n---- Error Update Suhu to ",eleTankId, " ----");
+																console.log(errUpdateSuhu);
+														})
+
+													// console.log(" --> Insert to Table Iot_Suhu_Temp Completed !")
+												})
+												.catch((errUpdateJarak)=>{
+														console.log("\n---- Error Update Jarak to ",eleTankId, " ----");
+														console.log(errUpdateJarak);
+												})
+										}
+									}
 
 							}
 
-							// Step 9
+							// Step 8
 							progressBar.update(
-									Math.min((Math.round((14.285 * (6.9 + (counterAngka * 0.01)) * 100)) / 100), 100)
+									// Math.min((Math.round((14.285 * (6.9 + (counterAngka * 0.01)) * 100)) / 100), 100)
+									Math.min((Math.round((14.285 * (counterMajor + counterMinor) * 10000)) / 10000), 100)
 							)
 					});
-
-				counterAngka++;
+					counterMinor += 0.0001;
+				// counterAngka++;
 		}
 
 		// console.log(hasil)
@@ -417,7 +631,8 @@ const update_to_arr_json_tangki_last = (data_arr, ele, tangki_name, tangki_api, 
 		}
 }
 
-const get_jenis_by_api_lastdata = async (arr_json_tangki_last, callback) => {
+// const get_jenis_by_api_lastdata = async (arr_json_tangki_last, callback) => {
+const get_jenis_by_api_lastdata = async (arr_json_tangki_last) => {
 		let arr_json_tangki_last_length = Object.keys(arr_json_tangki_last).length;
 		let obj_keys_last_onprogress_1m = 0;
 		
@@ -476,6 +691,25 @@ const get_jenis_by_api_lastdata = async (arr_json_tangki_last, callback) => {
 								obj_keys_last_onprogress_1m++;
 						// })
 				}
+				// console.log("\n (--> 1st) arr_json_tangki_last_length")
+				// console.log(arr_json_tangki_last_length)
+				// console.log("(--> 2nd) obj_keys_last_onprogress_1m")
+				// console.log(obj_keys_last_onprogress_1m)
+
+				let temp_mst_jenis_by_api = {};
+
+				if (Object.keys(arr_temp_jenis).length > 0)
+				{
+						temp_mst_jenis_by_api = {...arr_temp_jenis};
+						this.mst_jenis_by_api = {...arr_temp_jenis};
+				}
+				else{
+						temp_mst_jenis_by_api = {}
+						this.mst_jenis_by_api = {}
+				}
+
+				return temp_mst_jenis_by_api;
+				
 				// })
 		}catch(e){
 
@@ -486,31 +720,33 @@ const get_jenis_by_api_lastdata = async (arr_json_tangki_last, callback) => {
 
 		// TUNGGU HINGGA SELESAI
 		
-		let intLast = setInterval(async ()=>{
-				if (arr_json_tangki_last_length == obj_keys_last_onprogress_1m){
+// 		let intLast = setInterval(async ()=>{
+// 				if (arr_json_tangki_last_length == obj_keys_last_onprogress_1m){
 
-						let temp_mst_jenis_by_api = {};
+// 						let temp_mst_jenis_by_api = {};
 
-						if (Object.keys(arr_temp_jenis).length > 0)
-						{
-								temp_mst_jenis_by_api = {...arr_temp_jenis};
-								this.mst_jenis_by_api = {...arr_temp_jenis};
-						}
-						else{
-								temp_mst_jenis_by_api = {}
-								this.mst_jenis_by_api = {}  
-						}
+// 						if (Object.keys(arr_temp_jenis).length > 0)
+// 						{
+// 								temp_mst_jenis_by_api = {...arr_temp_jenis};
+// 								this.mst_jenis_by_api = {...arr_temp_jenis};
+// 						}
+// 						else{
+// 								temp_mst_jenis_by_api = {}
+// 								this.mst_jenis_by_api = {}  
+// 						}
 						
-						clearInterval(intLast)
-						// return temp_mst_jenis_by_api;
-						callback(temp_mst_jenis_by_api);
-				}
-		})
+// 						clearInterval(intLast)
+// 						// return temp_mst_jenis_by_api;
+// 						callback(temp_mst_jenis_by_api);
+// 				}
+// 		})
 }
 
-const processPreviousMinTank_fromLast = async (arr_json_tangki_last) => {
-		// console.log("processPreviousMinTank_fromLast");
+const processPreviousMinTank_fromLast = async (arr_json_tangki_last, counterMajor, p_counterMinor) => {
+		// console.log("\nprocessPreviousMinTank_fromLast\n");
 		// console.log(arr_json_tangki_last);
+		
+		// console.log('-------------(4.1) masuk 4.1\n')
 
 		this.arr_tangki_last_from_dataHour = {};
 
@@ -525,9 +761,10 @@ const processPreviousMinTank_fromLast = async (arr_json_tangki_last) => {
 		let obj_keys_last_onprogress = 0;
 		
 		let counterAngka = 0;
+		let counterMinor = p_counterMinor;
 
 		// ** Step 8
-		progressBar.update(14.285 * 6.8);
+		// progressBar.update(14.285 * (counterMajor + counterAngka));
 
 		// obj_keys_last.forEach(async (ele_name, idx_rec)=>{
 		for (const ele_name of obj_keys_last)
@@ -628,17 +865,24 @@ const processPreviousMinTank_fromLast = async (arr_json_tangki_last) => {
 
 									// ** Step 8 Sub
 									progressBar.update(
-											Math.min(Math.round((14.285 * (6.8 + (counterAngka * 0.01)) * 100)) / 100, 100)
+											// Math.min(Math.round((14.285 * (6.7 + (counterAngka * 0.01)) * 1000)) / 1000, 100)
+											Math.min(Math.round((14.285 * (counterMajor + (counterAngka)) * 10000)) / 10000, 100)
 									)
 
 									counterAngka++;
+									counterMinor += 0.0001;
 						// });
 
 				}
 		}
 		// });
 
-		const intervalDataHour = setInterval(()=>{
+		// console.log("\nCounter Angka : ", counterAngka)
+		// console.log("\nObject Keys Last: ", obj_keys_last.length)
+
+		// console.log('-------------(4.2) masuk 4.2\n')
+
+		// const intervalDataHour = setInterval(()=>{
 				if (counterAngka == obj_keys_last.length)
 				{
 				
@@ -657,6 +901,7 @@ const processPreviousMinTank_fromLast = async (arr_json_tangki_last) => {
 					{
 						if (arr_raw_reduce.length == 0)
 						{
+
 							Object.keys(this.arr_json_tangki_last).forEach((ele_name,idx_name)=>{
 
 								let temp_obj = {};
@@ -740,26 +985,22 @@ const processPreviousMinTank_fromLast = async (arr_json_tangki_last) => {
 
 					this.mst_1m_cpo_pko = {...kosongkan_data_mst_1m_cpopko};
 					
-					funcSeparateTank(arr_raw_reduce, async (obj_tinggi_tank_modus_filter_single)=>{
+					// funcSeparateTank(arr_raw_reduce, async (obj_tinggi_tank_modus_filter_single)=>{
+					const obj_tinggi_tank_modus_filter_single = funcSeparateTank(arr_raw_reduce);
 					
 						// INSERT DATA TO DATABASE
 						// console.log(obj_tinggi_tank_modus_filter_single);
 
-						await handleToDatabase(obj_tinggi_tank_modus_filter_single);
-						console.log('\t----- COMPLETED -----')
+						await handleToDatabase(obj_tinggi_tank_modus_filter_single, counterMajor, counterMinor, param_replace);
 						
-						// progressBar.update(100);
-						progressBar.stop();
+						return obj_tinggi_tank_modus_filter_single;
 
-						setTimeout(()=>{
-								// console.log("\nStart Begin")
-									rekursif();
-							},60000)
-					})
+				// })
 
-					clearInterval(intervalDataHour);
+
+					// clearInterval(intervalDataHour);
 				}
-		});
+		// });
 
 		// progressBar.update(100);
 		// progressBar.stop()
@@ -799,8 +1040,9 @@ const funcSeparateTank = (arr_raw_alls, callback) => {
 				let obj_store_suhu_temp = {};
 
 
-				Object.keys(data_arr).forEach((ele_attr)=>{
-
+				// Object.keys(data_arr).forEach((ele_attr)=>{
+				for (const ele_attr of Object.keys(data_arr))
+				{
 						let patt_tank = new RegExp(/(Tank [0-9]+)/,'gi');
 						let patt_tank_exec = patt_tank.exec(ele_attr);
 
@@ -946,11 +1188,15 @@ const funcSeparateTank = (arr_raw_alls, callback) => {
 										}
 								}
 						}
-				});
+				// });
+				}
+
 				// ... end looping dalam object data_arr key
 
 				// simpan hasil kumpulan key ke obj_tank (final)
-				Object.keys(obj_store_temp).forEach((ele_nama_tangki, idx_store)=>{
+				// Object.keys(obj_store_temp).forEach((ele_nama_tangki, idx_store)=>{
+				for (const ele_nama_tangki of Object.keys(obj_store_temp))
+				{
 						let arr_tinggi_suhu_tmp = [];
           	let arr_tinggi_suhu_val_tmp = [];
 
@@ -1054,7 +1300,6 @@ const funcSeparateTank = (arr_raw_alls, callback) => {
 								let jenisExistsInDB = false;
 
 								Object.keys(this.mst_jenis_by_api).forEach((ele_tank_api, idx_tank_api)=>{
-
 										if (ele_tank_api == ele_nama_tangki)
 										{
 											if (this.mst_jenis_by_api?.[ele_tank_api] != '' &&
@@ -1177,7 +1422,8 @@ const funcSeparateTank = (arr_raw_alls, callback) => {
 								]
 						}
 
-				})
+				// })
+				}
 				// ... end obj_store_temp  
 
 		}
@@ -1195,8 +1441,9 @@ const funcSeparateTank = (arr_raw_alls, callback) => {
 		 let obj_tinggi_modus_filter = {};
 		 let obj_tinggi_tank_modus_filter_single = {};
 
-		 Object.keys(obj_tank).forEach((ele_nama_tangki, idx_obj_tank)=>{
-
+		//  Object.keys(obj_tank).forEach((ele_nama_tangki, idx_obj_tank)=>{
+		for (const ele_nama_tangki of Object.keys(obj_tank))
+		{
 					// [11.16, 11.10, 11.16, 11.16]
 					obj_temp_tinggi_map = obj_tank?.[ele_nama_tangki].map((ele_key, idx_key)=>{
 						return ele_key?.['tinggi_minyak']
@@ -1431,10 +1678,12 @@ const funcSeparateTank = (arr_raw_alls, callback) => {
 							
 					}
 
-		 });
+		//  });
+		}
 		//  * end Looping Object.keys(obj_tank)
 
-		callback(obj_tinggi_tank_modus_filter_single)
+		return obj_tinggi_tank_modus_filter_single
+		// callback(obj_tinggi_tank_modus_filter_single)
 }
 
 
@@ -1454,7 +1703,6 @@ const rekursif = async () => {
     // Get List Device Valid Pattern
 		// progressBar.update(14.285 * 1, {format: generateDynamicFormat(14.285*1, 'Get Device Valid Pattern')});
 	
-		
 		progressBar.update(14.285 * 1);
 
 		// ** step 1
@@ -1591,89 +1839,186 @@ const rekursif = async () => {
 
 																								// ** step 5
 																								progressBar.update(
-																										Math.round((14.285 * 5) * 100) / 100
+																										Math.min(Math.round((14.285 * 5) * 100) / 100, 100)
 																								);
 																								// get Last Data Terakhir dari semua tangki
-																								await getLastData(global_arr_id_device_group).then(async resLastData => {
+																								
+																								await getLastData(global_arr_id_device_group, param_api, param_date, param_hourbegin, param_hourlast).then(async resLastData => {
 																										if (typeof resComTank?.['status'] != 'undefined' && 
 																														resComTank?.['status'].toLowerCase() == 'success')
 																										{
 																											arrHasilLast = resLastData?.['hasil']?.['data'];
+
+																											// console.log("arrHasilLast")
+																											// console.log(arrHasilLast)
+																											// console.log("==================> end arrHasilLast <==========")
 																											
-																											if (typeof arrHasilLast != 'undefined' && arrHasilLast != null)
+																											// * Grouping per waktu time, jadi tidak mungkin ada tangki yang sama dalam satu time.
+																											let hasilgroup = _.groupBy(arrHasilLast, 'time');
+
+																											// console.log("hasilgroup")
+																											// console.log(hasilgroup)
+																											// console.log("==================> end hasilgroup <==========")
+
+																											// console.log("ARR JSON GET LAST DATA\n")
+																											// console.log(arrHasilLast)
+
+																											// * simpan ke array yang menampung time secara flat
+																											// * Object awal => { '2023-12-14 09:37:00' : [{ id_device:'WSSLTANK1', dst...}], dst... }
+																											// * hasil akhir => [ '2023-12-14 09:37:00', '2023-12-14 09:36:00' ]
+																											let arrHasilGroup = Object.keys(hasilgroup);
+
+																											// console.log("arrHasilGroup")
+																											// console.log(arrHasilGroup)
+																											
+																											if (arrHasilGroup.length > 0)
 																											{
+																												let counterAngka = 0.001	// cliProgress
+																												// ** array Hasil group [ '2023-12-14 09:37:00', '2023-12-14 09:36:00' ]
+																												let counterProgressMajor = 6.5;
 
-																													this.arr_json_alldata = [...
-																																arrHasilLast.filter((res)=>{
-																																		if (typeof res?.['id_device'] != 'undefined' && 
-																																				res?.['id_device'] != null &&
-																																				(
-																																						// cek apakah id_device nya valid dan tercantum di dalam tabel device pattern
-																																						this.arr_device_pattern.find((val,idx)=>res?.['id_device'].toString().toUpperCase().indexOf(val) != -1)
-																																				)
-																																		)
-																																		{
-																																				return true
-																																		}
-																																})
-																													];
+																												for (const hasilGroupSingle of arrHasilGroup)
+																												{
 
-																													// ** Looping
-																													// console.log("=== ", this.mst_list_tangki);
-																													this.arr_json_alldata.forEach((ele)=>{
+																													// *Kosongkan dahulu object arr_json_tangki_last
+																														this.arr_json_tangki_last = {};
+																														this.arr_date_realtime = [];
 
-																															let data_arr = ele?.['data']?.[0];
+																														// * ambil per waktu time. dalam satu time banyak tangki yang unik.
 
-																															let counterAngka = 0;
-																															for (let mst_list_tangki of this.mst_list_tangki)
-																															{
+																														let arrHasilGroupTime = hasilgroup?.[hasilGroupSingle];
+																													
+																														// if (typeof arrHasilLast != 'undefined' && arrHasilLast != null)
+																														
+																														if (typeof arrHasilGroupTime != 'undefined' && arrHasilGroupTime != null)
+																														{
 
-																																	// if (mst_list_tangki?.['name'] == 'tangki_1')
-																																	// {
-																																			// simpan ke this.arr_json_tangki_last
-																																			// console.log("*** => ", Object.keys(data_arr));
+																																this.arr_json_alldata = [...
+																																			// arrHasilLast.filter((res)=>{
+
+																																				arrHasilGroupTime.filter((res)=>{
+																																					if (typeof res?.['id_device'] != 'undefined' && 
+																																							res?.['id_device'] != null &&
+																																							(
+																																									// cek apakah id_device nya valid dan tercantum di dalam tabel device pattern
+																																									this.arr_device_pattern.find((val,idx)=>res?.['id_device'].toString().toUpperCase().indexOf(val) != -1)
+																																							)
+																																					)
+																																					{
+																																							return true
+																																					}
+																																			})
+																																];
 			
-																																				update_to_arr_json_tangki_last(data_arr, ele, mst_list_tangki?.['name'], mst_list_tangki?.['api'], this.arr_json_tangki_last);
+																																// ** Looping
+																																// console.log("=== ", this.mst_list_tangki);
+			
+																																// console.log("MASTER LIST TANGKI\n")
+																																// console.log(this.mst_list_tangki)
+			
+																																// console.log('\nARR JSON ALL DATA (AWAL)\n---');
+																																// console.log(this.arr_json_tangki_last);
 
-																																				progressBar.update(
-																																						Math.round((14.285 * (5 + (counterAngka * 0.01)) * 100)) / 100
-																																				)
-																																				counterAngka++;
-																																	// }
-																															}
-																													});
+																																// console.log(Object.keys(this.arr_json_tangki_last));
 
-																													// ** step 6
-																													progressBar.update(
-																															Math.round((14.285 * 6) * 100) / 100
-																													);
-																													// await get_jenis_by_api_lastdata(this.arr_json_tangki_last).then(async (resJenisAPI)=>{
 
-																													get_jenis_by_api_lastdata(this.arr_json_tangki_last, (resJenisAPI)=>{
+																																// this.arr_json_alldata.forEach((ele)=>{
+																																
+																																for (const ele of this.arr_json_alldata){
+			
+																																		let data_arr = ele?.['data']?.[0];
+																																		
+																																		// let counterAngka = 0;
+																																		// for (let mst_list_tangki of this.mst_list_tangki)
+																																		for (const mst_list_tangki of this.mst_list_tangki)
+																																		{
+																																			
+																																				// if (mst_list_tangki?.['name'] == 'tangki_1')
+																																				// {
+																																						// simpan ke this.arr_json_tangki_last
+																																						// console.log("*** => ", Object.keys(data_arr));
+						
+																																							update_to_arr_json_tangki_last(data_arr, ele, mst_list_tangki?.['name'], mst_list_tangki?.['api'], this.arr_json_tangki_last);
+			
+																																							progressBar.update(
+																																									// Math.round((14.285 * (5 + (counterAngka * 0.01)) * 100)) / 100
+																																									Math.min(Math.round((14.285 * (counterProgressMajor + (counterAngka)) * 10000)) / 10000, 100)
+																																							)
+																																							counterAngka += 0.001;
+																																				// }
+																																		}
+																																// });
+																																}
 
-																													// const resJenisAPI = await get_jenis_by_api_lastdata(this.arr_json_tangki_last);
-																															// console.log("\nMaster Jenis Tangki")
-																															// console.log(this.mst_jenis_by_api)
-																															
-																															this.mst_jenis_by_api_perjam = {...resJenisAPI};
 
-																															// console.log("\n");
-																															// console.log(this.mst_jenis_by_api_perjam);
+																																// console.log("\nARR JSON ALLDATA \n", hasilGroupSingle ,"end arr json alldata\n");
+																																// console.log('\nARR JSON TANGKI LAST (AKHIR)\n---');
+																																// console.log(this.arr_json_tangki_last);
+			
+																																// ** step 6
+																																counterAngka += 0.001;
+																																progressBar.update(
+																																		// Math.round((14.285 * 6) * 100000) / 100000
+																																		Math.min(Math.round((14.285 * (counterProgressMajor + counterAngka)) * 10000) / 10000, 100)
+																																);
+													
+																																// await get_jenis_by_api_lastdata(this.arr_json_tangki_last).then(async (resJenisAPI)=>{
+			
+																																// console.log("-------------- ARR JSON TANGKI LAST -------- ", mst_list_tangki)
+																																// console.log(this.arr_json_tangki_last);
 
-																															// ** step 7
-																															progressBar.update(14.285 * 6.5);
-																															processPreviousMinTank_fromLast(this.arr_json_tangki_last);
+																																// console.log('\n (1) -------------(1) masuk 1')
+																																
 
-																															// setTimeout(() => {
-																															//     rekursif()
-																															// }, 3000);
-																													})
+																																// const jeniapilast = await get_jenis_by_api_lastdata(this.arr_json_tangki_last, async (resJenisAPI)=>{
+																																const resJenisAPI = await get_jenis_by_api_lastdata(this.arr_json_tangki_last);
 
-																													// console.log(this.arr_json_tangki_last)
+																																console.log("\n---- (3) MAP arr_json_tangki_last ----\n")
+																																let maptes = _.mapValues(this.arr_json_tangki_last, 'time');
+																																console.log(maptes)
 
+																																		// console.log('-------------(2) masuk 2\n')
+		
+																																		// const resJenisAPI = await get_jenis_by_api_lastdata(this.arr_json_tangki_last);
+																																		// console.log("\nMaster Jenis Tangki")
+																																		// console.log(this.mst_jenis_by_api)
+																																		
+																																		this.mst_jenis_by_api_perjam = {...resJenisAPI};
+																																		// console.log('-------------(3) masuk 3\n')
+			
+																																		// console.log("\n");
+																																		// console.log(this.mst_jenis_by_api_perjam);
+			
+																																		// ** step 7
+																																		// progressBar.update(14.285 * 6.5);
+
+																																		// console.log('-------------(4) masuk 4\n')
+																																		
+																																		const obj_tinggi_tank_modus_filter_single = await processPreviousMinTank_fromLast(this.arr_json_tangki_last, counterProgressMajor, counterAngka);
+																																		counterAngka += 0.001;
+																																		counterProgressMajor += 0.1
+			
+																																// })
+			
+																																// console.log(this.arr_json_tangki_last)
+			
+																														}
+																														// * Looping hasil last data
+																												}
+
+																												progressBar.update(100);
+																												progressBar.stop();
+
+																												console.log('\t----- COMPLETED -----')
+																												if (param_api == 'getlastdata')
+																												{
+																														setTimeout(() => {
+																																rekursif()
+																														}, 60000);
+																												}
+																												// ** ---- end array Hasil group
 																											}
-																											// * Looping hasil last data
-																											
+
 																										}
 																								})
 																					}
