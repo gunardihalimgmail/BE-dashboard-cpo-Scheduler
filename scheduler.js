@@ -256,17 +256,17 @@ const handleToDatabase = async(p_obj_tinggi_tank_modus_filter_single, counterMaj
 				// console.log("---- Tank", eleTankId, "----");
 				// console.log(p_obj_tinggi_tank_modus_filter_single?.[eleTankId]);
 
-				let qryCheckJarak = `SELECT * FROM Iot_Jarak_Temp where tangki_id = '` + eleTankId + `'` +
+				let qryCheckJarak = `SELECT * FROM Iot_Jarak where tangki_id = '` + eleTankId + `'` +
 									` and logtime = '${obj_modus?.[eleTankId]?.['time']}'`;
 				
-				let qryInsertJarak = `INSERT INTO Iot_Jarak_Temp(tangki_id, logtime, jarak_sensor, tinggi_sounding, jarak_min, jarak_max, datapoin, logtime_min, logtime_max, berat, created_time)` +
+				let qryInsertJarak = `INSERT INTO Iot_Jarak(tangki_id, logtime, jarak_sensor, tinggi_sounding, jarak_min, jarak_max, datapoin, logtime_min, logtime_max, berat, created_time)` +
 									` VALUES('${eleTankId}', '${obj_modus?.[eleTankId]?.['time']}', ${obj_modus?.[eleTankId]?.['jarak_sensor_cm']}, ${obj_modus?.[eleTankId]?.['tinggi_minyak_cm']}` +
 									`, ${obj_modus?.[eleTankId]?.['data_jarak_cm_10min_min']}, ${obj_modus?.[eleTankId]?.['data_jarak_cm_10min_max']}` +
 									`, ${obj_modus?.[eleTankId]?.['datapoin']}, '${obj_modus?.[eleTankId]?.['data_jarak_cm_10min_min_log']}', '${obj_modus?.[eleTankId]?.['data_jarak_cm_10min_max_log']}'` +
 									`, ${obj_modus?.[eleTankId]?.['volume']}, '${obj_modus?.[eleTankId]?.['created_time']}'` +	
 								`)`;
 
-					let qryUpdateJarak = `UPDATE Iot_Jarak_Temp` + 
+					let qryUpdateJarak = `UPDATE Iot_Jarak` + 
 							` SET logtime='${obj_modus?.[eleTankId]?.['time']}'` +
 							`, jarak_sensor=${obj_modus?.[eleTankId]?.['jarak_sensor_cm']}` + 
 							`, tinggi_sounding=${obj_modus?.[eleTankId]?.['tinggi_minyak_cm']}` + 
@@ -281,16 +281,16 @@ const handleToDatabase = async(p_obj_tinggi_tank_modus_filter_single, counterMaj
 					
 				
 								
-				let qryCheckSuhu = `SELECT * FROM Iot_Suhu_Temp where tangki_id = '` + eleTankId + `'` +
+				let qryCheckSuhu = `SELECT * FROM Iot_Suhu where tangki_id = '` + eleTankId + `'` +
 								` and suhutime = '${obj_modus?.[eleTankId]?.['time']}'`;
 
-				let qryInsertSuhu = `INSERT INTO Iot_Suhu_Temp(tangki_id, logtime, suhu, suhutime, suhu_count, suhu_min, suhu_max, created_time)` +
+				let qryInsertSuhu = `INSERT INTO Iot_Suhu(tangki_id, logtime, suhu, suhutime, suhu_count, suhu_min, suhu_max, created_time)` +
 									` VALUES('${eleTankId}', '${obj_modus?.[eleTankId]?.['logtime_suhu']}', ${obj_modus?.[eleTankId]?.['data_suhu_slice_sum_avg']}, '${obj_modus?.[eleTankId]?.['time']}'` +
 									`, ${obj_modus?.[eleTankId]?.['suhu_count']}, ${obj_modus?.[eleTankId]?.['data_suhu_slice_min']}` +
 									`, ${obj_modus?.[eleTankId]?.['data_suhu_slice_max']}, '${obj_modus?.[eleTankId]?.['created_time']}'` +	
 								`)`;
 
-				let qryUpdateSuhu = `UPDATE Iot_Suhu_Temp` + 
+				let qryUpdateSuhu = `UPDATE Iot_Suhu` + 
 								` SET logtime='${obj_modus?.[eleTankId]?.['logtime_suhu']}'` +
 								`, suhu=${obj_modus?.[eleTankId]?.['data_suhu_slice_sum_avg']}` + 
 								`, suhutime='${obj_modus?.[eleTankId]?.['time']}'` + 
